@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8">
+    <title>チャットアプリ</title>
+    <!-- Tailwind CSS の CDN リンクを追加 -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-300">
+
+    <!-- コンテンツ表示画面 -->
+    <main class="container mx-auto pt-2 flex flex-col lg:flex-row justify-center">
+
+        <!-- 入力画面 -->
+        <section class="w-full lg:w-1/2 px-2 mb-4 lg:mb-0">
+            <div class="w-full p-6 border bg-green-100 border-gray-300 rounded-lg">
+                <div>
+                    <!-- 名前入力フォーム -->
+                    <div class="flex items-center">
+                        <p class="mr-2">名前：</p>
+                        <select id="uname"
+                            class="block w-48 py-2 px-3 border border border-gray-500 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm focus:bg-white"
+                            required>
+                            <option value="">名前を選択してください</option>
+                            <option value="さわ">さわ</option>
+                            <option value="かおる">かおる</option>
+                            <option value="まさえ">まさえ</option>
+                            <option value="りつこ">りつこ</option>
+                        </select>
+                    </div>
+                    <!-- メッセージ入力フォーム -->
+                    <div class="mt-4">
+                        <label for="text" class="block text-sm font-medium text-gray-700">メッセージ：</label>
+                        <textarea id="text" cols="40" rows="5"
+                            class="block w-full mt-2 py-2 px-3 border border-gray-500 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            required></textarea>
+                    </div>
+                    <!-- 送信ボタン -->
+                    <div class="flex justify-end mt-4">
+                        <button id="send"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-blue-500">送信</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- チャットメッセージ表示画面 -->
+        <section class="w-full lg:w-1/2 px-2">
+            <div class="w-full h-full p-6  border bg-blue-100 border-gray-300 rounded-lg">
+                <div>
+                    <p class="inline-block w-full bg-blue-500 text-white text-center">メッセージ表示画面</p>
+                    <div id="output" class="overflow-y-auto h-full max-h-screen"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- JQuery -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <!-- JQuery -->
+
+
+     <!-- Firebase API Key -->
+     <script src="firebaseApiKey.js"></script>
+
+    <!--** 以下Firebase **-->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        //firebaseApiKey.jsからexportされているオブジェクトをfirebaseConfigという変数名で取り扱う
+        import firebaseConfig from "./firebaseApiKey.js"
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, push, set, update, remove, onChildAdded, onChildChanged, onChildRemoved }
+            from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+      
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const dbref = ref(db, "chat");
+
+        // 送信
+        $("#send").on("click", function () {
+            const uname = $("#uname").val();
+            const text = $("#text").val();
+
+            // 必須項目のチェック
+            if (!uname || !text) {
+                alert("名前とメッセージは必須です");
+                return;
+            }
+
+            const msg = {
+                uname: uname,
+                text: text,
+                timestamp: new Date().toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) // 年月日時分を取得
+            }
+
+            const newPostRef = push(dbref); // ユニークキーを生成
+            set(newPostRef, msg); // DBに値をセット
+        });
+
+        // 最初にデーター取得&onSnapshotでリアルタイムにデータを取得
+        onChildAdded(dbref, function (data) {
+
+            const msg = data.val();
+            const key = data.key; // ユニークKey
+            let h = '<div id="' + key + '" class="p-1 my-1">';
+            h += '<span class="font-bold">' + msg.uname + '</span>' + "（" + msg.timestamp + "）"; // 名前を太字で表示
+            h += '<br>';
+            h += '<span contentEditable="true" id="' + key + '_update" class="w-30 inline-block break-all border border-green-300 rounded-lg bg-white p-2">' + msg.text + '</span>';
+            h += '<br>';
+            h += '<button class="remove bg-blue-300 hover:bg-blue-400 text-white font-medium py-1 px-2 m-2 rounded-lg">削除</button>';
+            h += '<button class="update bg-yellow-300 hover:bg-yellow-400 text-white font-medium py-1 px-2 m-2 rounded-lg">修正</button>';
+            $("#output").append(h);
+
+            // チャットコンテナの高さを取得
+            const chatContainerHeight = $("#output")[0].scrollHeight;
+
+            // チャットコンテナが表示される高さより大きい場合はスクロールする
+            if (chatContainerHeight > $("#output").height()) {
+                $("#output").scrollTop(chatContainerHeight);
+            }
+        });
+
+        // 削除イベント
+        $("#output").on("click", ".remove", function () {
+            const key = $(this).parent().attr("id");
+            const remove_item = ref(db, "chat/" + key)
+            remove(remove_item); // Firebaseデータ削除関数
+        });
+
+        // 更新イベント
+        $("#output").on("click", ".update", function () {
+            const key = $(this).parent().attr("id");
+            update(ref(db, "chat/" + key), {
+                text: $("#" + key + "_update").html()
+            });
+        });
+
+        // 削除処理がFirebase側で実行されたらイベント発生
+        onChildRemoved(dbref, (data) => {
+            $("#" + data.key).remove(); // DOM操作関数（対象を削除）
+        });
+
+        // 更新処理がFirebase側で実行されたらイベント発生
+        onChildChanged(dbref, (data) => {
+            const key = data.key; // ユニークKey
+            $("#" + key + "_update").html(data.val().text);
+            $("#" + key + "_update").fadeOut(800).fadeIn(800);
+        });
+    </script>
+</body>
+
+</html>
